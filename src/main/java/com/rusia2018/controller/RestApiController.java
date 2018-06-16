@@ -179,6 +179,7 @@ public class RestApiController {
 	@PutMapping("/static/matches")
 	public StaticMatches updateStaticMatchResult(@RequestBody StaticMatches staticMatches) {
 		Integer staticMatchesRes; //To check if it was updated
+		Boolean isAlreadyUpdated;
 		
 		//User
 		User user = new User();
@@ -186,45 +187,59 @@ public class RestApiController {
 		//Determines Result of the match
 		String staticMatchResult = determineResult(staticMatches.getHome_result(), staticMatches.getAway_result());
 		
-		//Update result in static_matches for one match
-		staticMatches.setFinished(true);
-		staticMatchesRes = staticMatchesRepository.updateStaticMatchResultById(staticMatches.getHome_result(), staticMatches.getAway_result(), staticMatches.getFinished() ,staticMatches.getIdStaticMatches(), staticMatches.getName());
+		//Check if match is updated already, to no update twice a result causing data corruption
+		isAlreadyUpdated = staticMatchesRepository.checkIfMatchIsAlreadyUpdated(staticMatches.getIdStaticMatches(), staticMatches.getName());
 		
-		//Get All userMatches with name and id of the match result updated
-		ArrayList<UserMatches> listUserMatchesByMatch = new ArrayList<UserMatches>();
-		listUserMatchesByMatch = userMatchesRepository.getSameUserMatchForAllUsersByMatchId(staticMatches.getName());
-		
-		//For-Each to determinate if user adds points
-		for (UserMatches userMatches : listUserMatchesByMatch) {
-			//Determines userMatch Result
-			String userMatchResult = determineResult(userMatches.getHome_result(), userMatches.getAway_result());
+		//If it's not already updated, executes updates
+		if(isAlreadyUpdated == null || !isAlreadyUpdated ) {
+			//Update result in static_matches for one match
+			logger.info("Match will be updated");
+			staticMatches.setFinished(true);
+			staticMatchesRes = staticMatchesRepository.updateStaticMatchResultById(staticMatches.getHome_result(), staticMatches.getAway_result(), staticMatches.getFinished() ,staticMatches.getIdStaticMatches(), staticMatches.getName());
+			logger.info("Match updated successfully");
 			
-			//Get user to update TotalScore
-			user = userRepository.checkIfUserExist(userMatches.getIdUser());
+			//Get All userMatches with name and id of the match result updated
+			ArrayList<UserMatches> listUserMatchesByMatch = new ArrayList<UserMatches>();
+			listUserMatchesByMatch = userMatchesRepository.getSameUserMatchForAllUsersByMatchId(staticMatches.getName());
 			
-			//Get current totalScore
-			Integer newTotalScore = user.getTotalScore();
-			
-			//Adds 1 point
-			if(staticMatchResult.equals(userMatchResult)) {
-				newTotalScore++;
-			}
-			
-			//Adds 3 points
-			if(userMatches.getHome_result() == staticMatches.getHome_result() 
-					&& userMatches.getAway_result() == staticMatches.getAway_result() ) {
+			//For-Each to determinate if user adds points
+			for (UserMatches userMatches : listUserMatchesByMatch) {
+				//Determines userMatch Result
+				String userMatchResult = determineResult(userMatches.getHome_result(), userMatches.getAway_result());
 				
-				newTotalScore += 2;
+				//Get user to update TotalScore
+				user = userRepository.checkIfUserExist(userMatches.getIdUser());
+				
+				//Get current totalScore
+				logger.info("User " + user.getFirstName() + " current TotalScore: " + user.getTotalScore());
+				Integer newTotalScore = user.getTotalScore();
+				
+				//Adds 1 point
+				if(staticMatchResult.equals(userMatchResult)) {
+					newTotalScore++;
+				}
+				
+				//Adds 3 points
+				if(userMatches.getHome_result() == staticMatches.getHome_result() 
+						&& userMatches.getAway_result() == staticMatches.getAway_result() ) {
+					
+					newTotalScore += 2;
+				}
+				
+				//Update totalScore
+				logger.info("User " + user.getFirstName() + " has new total score: " + newTotalScore + ", it will be updated");
+				user.setTotalScore(newTotalScore);
+				userRepository.updateUserScore(user.getTotalScore(), user.getIdUser());
+				logger.info("User " + user.getFirstName() + " updated." );
+				
+				
+				//update finished column as "true" for the match o that user
+				userMatchesRepository.updateUserMatchById(userMatches.getHome_result(), userMatches.getAway_result(), true, userMatches.getIdUser(), userMatches.getIdUserMatches(), userMatches.getName());
+				logger.info("finished column marked as true for User " + user.getFirstName() + " for match name: "  + userMatches.getName());
 			}
-			
-			//Update totalScore
-			user.setTotalScore(newTotalScore);
-			userRepository.updateUserScore(user.getTotalScore(), user.getIdUser());
-			
-			//update finished column as "true" for the match o that user
-			userMatchesRepository.updateUserMatchById(userMatches.getHome_result(), userMatches.getAway_result(), true, userMatches.getIdUser(), userMatches.getIdUserMatches(), userMatches.getName());
+		}else {
+			logger.info("Match is already updated, the update of the match and points for every user won't be executed ");
 		}
-		
 		
 	    return staticMatches;
 	}

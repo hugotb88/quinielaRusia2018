@@ -25,6 +25,8 @@ public interface StaticMatchesRepository extends JpaRepository<StaticMatches, Se
 	@Query(value="SELECT * FROM static_matches sm WHERE sm.idStaticMatches = :idStaticMatches",nativeQuery=true)
     public Match getMatchById(@Param("idStaticMatches") int idStaticMatches);
 	
+	@Query(value="SELECT finished FROM static_matches sm WHERE sm.idStaticMatches = :idStaticMatches AND name = :name AND finished = true",nativeQuery=true)
+    public Boolean checkIfMatchIsAlreadyUpdated(@Param("idStaticMatches") Long idStaticMatches, @Param("name") Integer name);
 	
 	@Transactional
 	@Modifying
